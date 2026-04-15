@@ -582,7 +582,7 @@ describe Predictor::Base do
       sm.ensure_similarity_limit_is_obeyed!
 
       expect(redis.zcard(key)).to eq(128)
-      expect(redis.object(:encoding, key)).to eq('ziplist') # Efficient
+      expect(redis.object(:encoding, key)).to eq('listpack').or eq('ziplist') # Efficient
     end
   end
 end

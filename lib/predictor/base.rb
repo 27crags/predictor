@@ -217,31 +217,31 @@ module Predictor::Base
         keys    = []
         weights = []
 
-        input_matrices.each do |key, matrix|
+        input_matrices.each do |_matrix_key, matrix|
           k = matrix.redis_key(:sets, item)
           item_keys = Predictor.redis.smembers(k).map { |set| matrix.redis_key(:items, set) }
 
           counts = Predictor.redis.multi do |multi|
-            item_keys.each { |key| Predictor.redis.scard(key) }
+            item_keys.each { |item_key| multi.scard(item_key) }
           end
 
-          item_keys.zip(counts).each do |key, count|
+          item_keys.zip(counts).each do |item_key, count|
             unless count.zero?
-              keys << key
+              keys << item_key
               weights << matrix.weight / count
             end
           end
         end
 
         Predictor.redis.multi do |multi|
-          key = redis_key(:similarities, item)
-          multi.del(key)
+          similarity_key = redis_key(:similarities, item)
+          multi.del(similarity_key)
 
           if keys.any?
-            multi.zunionstore(key, keys, weights: weights)
-            multi.zrem(key, item)
-            multi.zremrangebyrank(key, 0, -(similarity_limit + 1))
-            multi.zunionstore key, [key] # Rewrite zset for optimized storage.
+            multi.zunionstore(similarity_key, keys, weights: weights)
+            multi.zrem(similarity_key, item)
+            multi.zremrangebyrank(similarity_key, 0, -(similarity_limit + 1))
+            multi.zunionstore similarity_key, [similarity_key] # Rewrite zset for optimized storage.
           end
         end
       end

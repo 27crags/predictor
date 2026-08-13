@@ -328,6 +328,39 @@ describe Predictor::Base do
         expect(other[1]).to be < 10
       end
 
+      it "accepts a weighted item_set" do
+        BaseRecommender.input_matrix(:users, weight: 4.0)
+        BaseRecommender.input_matrix(:tags, weight: 1.0)
+        sm = BaseRecommender.new
+        sm.users.add_to_set('me', "foo", "bar", "fnord")
+        sm.users.add_to_set('not_me', "foo", "shmoo")
+        sm.users.add_to_set('another', "fnord", "other")
+        sm.users.add_to_set('another', "nada")
+        sm.tags.add_to_set('tag1', "foo", "fnord", "shmoo")
+        sm.tags.add_to_set('tag2', "bar", "shmoo")
+        sm.tags.add_to_set('tag3', "shmoo", "nada")
+        sm.process!
+
+        # A hash weights each item's similarities; an array is the same as weighting everything 1.0.
+        expect(sm.predictions_for(item_set: {"foo" => 1.0, "bar" => 1.0, "fnord" => 1.0}))
+          .to eq(sm.predictions_for(item_set: ["foo", "bar", "fnord"]))
+
+        # Items in the set are still excluded from their own predictions.
+        expect(sm.predictions_for(item_set: {"foo" => 1.0, "bar" => 1.0, "fnord" => 1.0}))
+          .not_to include("foo", "bar", "fnord")
+
+        # Weighting an item up pulls its neighbours up with it. "other" and "nada"
+        # are related to "fnord" only, so they overtake "shmoo" once "fnord" dominates.
+        expect(sm.predictions_for(item_set: ["foo", "bar", "fnord"])).to eq(["shmoo", "other", "nada"])
+        expect(sm.predictions_for(item_set: {"foo" => 0.1, "bar" => 0.1, "fnord" => 100.0}))
+          .to eq(["other", "nada", "shmoo"])
+
+        # Make sure the weights actually reach Redis.
+        unweighted = sm.predictions_for(item_set: ["fnord"], with_scores: true).to_h
+        weighted = sm.predictions_for(item_set: {"fnord" => 10.0}, with_scores: true).to_h
+        expect(weighted["other"]).to be_within(0.0001).of(unweighted["other"] * 10)
+      end
+
       it "accepts a :boost option, even with an empty item set" do
         BaseRecommender.input_matrix(:users, weight: 4.0)
         BaseRecommender.input_matrix(:tags, weight: 1.0)

@@ -117,6 +117,11 @@ recommender.predictions_for("user-1", matrix_label: :users, offset: 10, limit: 1
 
 # Gimme some scores and ignore course-2....that course-2 is one sketchy fella
 recommender.predictions_for("user-1", matrix_label: :users, with_scores: true, exclusion_set: ["course-2"])
+
+# Some courses say more about a user than others. Pass item_set as a hash to weight
+# each item's contribution -- here course-1 pulls twice as hard as course-2, so
+# courses similar to course-1 rank higher:
+recommender.predictions_for(item_set: {"course-1" => 1.0, "course-2" => 0.5})
 ```
 
 Deleting Items

@@ -126,12 +126,18 @@ module Predictor::Base
       item_set = Predictor.redis.smembers(matrix.redis_key(:items, set))
     end
 
+    # item_set is either an Array of items, which contribute their similarities
+    # equally, or a Hash of item => weight for callers that want some items to
+    # pull harder than others (e.g. recent activity outweighing old activity).
+    item_weights = item_set.is_a?(Hash) ? item_set : Hash[item_set.map { |item| [item, 1.0] }]
+    items        = item_weights.keys
+
     item_keys = []
     weights   = []
 
-    item_set.each do |item|
+    item_weights.each do |item, weight|
       item_keys << redis_key(:similarities, item)
-      weights   << 1.0
+      weights   << weight.to_f
     end
 
     boost.each do |matrix_label, values|
@@ -162,7 +168,7 @@ module Predictor::Base
 
     Predictor.redis.multi do |multi|
       multi.zunionstore 'temp', item_keys, weights: weights
-      multi.zrem 'temp', item_set if item_set.any?
+      multi.zrem 'temp', items if items.any?
       multi.zrem 'temp', exclusion_set if exclusion_set.length > 0
 
       if on.any?
